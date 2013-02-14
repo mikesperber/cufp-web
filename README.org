@@ -188,13 +188,25 @@ Need to get the dates in there; also, overview pages.
    CLOSED: [2013-02-14 Thu 11:20]
 ** TODO link to speaker page?
 
-** TODO Session files ...
+** DONE Session files ...
+   CLOSED: [2013-02-14 Thu 12:02]
 
 See
 
 http://cufp.org/conference/sessions/2009/keynote-real-world-haskell
 
-=content_field_session_file=?
+=content_field_session_file=:
+
+#+BEGIN_EXAMPLE
+(45, 45, 0, 2, 1, 'a:9:{s:11:"description";s:19:"Presentation Slides";s:8:"duration";i:0;s:6:"height";i:0;s:5:"width";i:0;s:18:"audio_bitrate_mode";s:0:"";s:18:"audio_channel_mode";s:0:"";s:12:"audio_format";s:0:"";s:13:"audio_bitrate";i:0;s:17:"audio_sample_rate";i:0;}'),
+#+END_EXAMPLE
+
+This must refer somehow to this from =files=, via its =fid= field,
+linked to the =uid= field above?
+
+#+BEGIN_EXAMPLE
+(2, 1, 'OSullivanBryan.pdf', 'sites/all/files/sessionFiles/OSullivanBryan.pdf', 'application/pdf', 5408871, 1, 1264661683),
+#+END_EXAMPLE
 
 ** TODO session videos
 

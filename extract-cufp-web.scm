@@ -314,12 +314,20 @@
        (node-title node))))
    (else (user-name user))))
 
+(define-record-type :file
+  (make-file fid path mime)
+  file?
+  (fid file-fid)
+  (path file-path)
+  (mime file-mime))
+
 (define-record-type :session
-  (make-session vid node speaker time time-2 details format)
+  (make-session vid node speaker file time time-2 details format)
   session?
   (vid session-vid)
   (node session-node)
   (speaker session-speaker)
+  (file session-file)
   (time session-time)
   (time-2 session-time-2)
   (details session-details)
@@ -339,6 +347,21 @@
      file
      "users")
     user-table))
+
+(define (read-file-table file)
+  (let ((file-table (make-integer-table)))
+    (for-each-table-record-in-file
+     (lambda (rec)
+       (apply
+	(lambda (fid uid filename filepath filemime filesize status timestamp)
+	  (table-set! file-table
+		      fid
+		      (make-file fid filepath filemime)))
+	rec))
+     file
+     "files")
+    file-table))
+  
 
 (define (read-node-table user-table file)
   (let ((node-table (make-integer-table)))
@@ -387,9 +410,10 @@
 
     node-table))
 
-(define (read-session-table user-table node-table file)
+(define (read-session-table user-table file-table node-table file)
   (let ((session-speaker-table (make-integer-table))
-	(session-table (make-integer-table)))
+	(session-table (make-integer-table))
+	(session-file-table (make-integer-table)))
 
     (for-each-table-record-in-file
      (lambda (rec)
@@ -407,13 +431,26 @@
     (for-each-table-record-in-file
      (lambda (rec)
        (apply
+	(lambda (vid nid delta fid file-list data)
+	  (cond
+	   ((not fid) (values))
+	   ((table-ref file-table fid)
+	    => (lambda (file)
+		 (table-set! session-file-table vid file)))))
+	rec))
+     file
+     "content_field_session_file")
+
+    (for-each-table-record-in-file
+     (lambda (rec)
+       (apply
 	(lambda (nid vid time time-2 details format)
-	  (if details
-	      (table-set! session-table vid
-			  (make-session vid
-					(table-ref node-table nid)
-					(table-ref session-speaker-table vid)
-					(make-cufp-time time) (make-cufp-time time-2) details format))))
+	  (table-set! session-table vid
+		      (make-session vid
+				    (table-ref node-table nid)
+				    (table-ref session-speaker-table vid)
+				    (table-ref session-file-table vid)
+				    (make-cufp-time time) (make-cufp-time time-2) details format)))
 	rec))
      file
      "content_type_session")
@@ -487,8 +524,9 @@
 
 (define (extract-cufp-website file output-dir)
   (let* ((user-table (read-user-table file))
+	 (file-table (read-file-table file))
 	 (node-table (read-node-table user-table file))
-	 (session-table (read-session-table user-table node-table file)))
+	 (session-table (read-session-table user-table file-table node-table file)))
 
     (define page-replacements
       (list
@@ -510,7 +548,7 @@
     (table-walk 
      (lambda (vid node)
        (case (node-type node)
-	 ((job page conference_data conference_info session videos)
+	 ((job page conference_data conference_info videos)
 	  (cond
 	   ((node-url node)
 	    => (lambda (url)
@@ -547,6 +585,14 @@
 				 ((session-speaker session)
 				  => (lambda (speaker)
 				       (cons (cons "speaker" (user-full-name speaker)) front-matter)))
+				 (else
+				  front-matter)))
+			       (front-matter
+				(cond
+				 ((session-file session)
+				  => (lambda (file)
+				       (cons (cons "file" (file-path file))
+					     front-matter)))
 				 (else
 				  front-matter))))
 			  (write-front-matter port front-matter))
