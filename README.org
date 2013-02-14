@@ -184,7 +184,8 @@ Need to get the dates in there; also, overview pages.
             ^^ this is Bryan's uid
 
 ** TODO layout
-** TODO speaker full name
+** DONE speaker full name
+   CLOSED: [2013-02-14 Thu 11:20]
 ** TODO link to speaker page?
 
 ** TODO Session files ...

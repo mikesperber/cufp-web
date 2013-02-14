@@ -302,6 +302,18 @@
   (picture user-picture)
   (node user-node set-user-node!))
 
+(define (user-full-name user)
+  (cond
+   ((user-node user) =>
+    (lambda (node)
+      (or
+       (regexp-replace user-title-regexp
+		       (node-title node)
+		       0 #f #f
+		       values)
+       (node-title node))))
+   (else (user-name user))))
+
 (define-record-type :session
   (make-session vid node speaker time time-2 details format)
   session?
@@ -534,7 +546,7 @@
 				(cond
 				 ((session-speaker session)
 				  => (lambda (speaker)
-				       (cons (cons "speaker" (user-name speaker)) front-matter)))
+				       (cons (cons "speaker" (user-full-name speaker)) front-matter)))
 				 (else
 				  front-matter))))
 			  (write-front-matter port front-matter))
@@ -557,13 +569,7 @@
 		(write-front-matter port
 			    (list
 			     (cons "layout" "user")
-			     (cons "title"
-				   (or
-				    (regexp-replace user-title-regexp
-						    (node-title node)
-						    0 #f #f
-						    values)
-				    (node-title node)))))
+			     (cons "title" (user-full-name user))))
 		(write-body port (node-body node) page-replacements))))))
      user-table)))
 		
