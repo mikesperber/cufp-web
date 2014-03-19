@@ -457,13 +457,28 @@
 
     session-table))
 
+(define-record-type :page
+  (make-page type url headers body)
+  page?
+  (type page-type)
+  (url page-url)
+  (headers page-headers)
+  (body page-body))
+
+(define (apply-page-replacements page-replacements page)
+  (make-page (page-type page)
+	     (page-url page)
+	     (page-headers page)
+	     (regexps-replace-exhaustively page-replacements (page-body page))))
+
 (define (write-to-url output-dir url proc)
-   (let ((dir (file-name-directory url))
-	 (name (file-name-nondirectory url)))
-     (let* ((full-dir (string-append output-dir "/" dir))
-	    (full-name (string-append full-dir "/" name ".md")))
-       (make-directory-p full-dir)
-       (call-with-output-file full-name proc))))
+  (let ((dir (file-name-directory url))
+	(name (file-name-nondirectory url)))
+    (let* ((full-dir (string-append output-dir "/" dir))
+	   (full-name (string-append full-dir "/" name ".md")))
+      (display "Writing ") (display (string-append full-dir "/" full-name)) (newline)
+      (make-directory-p full-dir)
+      (call-with-output-file full-name proc))))
 
 (define (write-front-matter port alist)
   (display "---" port)
@@ -478,32 +493,65 @@
   (display "---" port)
   (newline port))
 
-(define (write-body port body page-replacements)
-  (display (regexps-replace-exhaustively page-replacements body) port)
-  (newline port))
+(define (write-page-to-jekyll output-dir page-replacements page)
+  (write-to-url output-dir
+		(page-url page)
+		(lambda (port)
+		  (write-front-matter port (page-headers page))
+		  (display (page-body page) port)
+		  (newline port))))
 
-(define (write-news output-dir node page-replacements)
+(define (write-page-to-json port page)
+  (write-json-object port
+		     (append (list (cons "type" (symbol->string (page-type page)))
+				   (cons "url" (page-url page))
+				   (cons "body" (page-body page)))
+			     (page-headers page))))
+
+(define (write-json-object port alist)
+  (display "{" port) (newline port)
+  (let loop ((alist alist))
+    (if (pair? alist)
+	(let ((p (car alist)))
+	  (display-json-string port (car p))
+	  (display " : " port)
+	  (display-json-string port (cdr p))
+	  (if (pair? (cdr alist))
+	      (begin (display "," port) (newline port)))
+	  (loop (cdr alist)))))
+  (newline port)
+  (display "}" port) (newline port))
+
+(define (display-json-string port s)
+  (display "\"" port)
+  (for-each (lambda (c)
+	      (case c
+		((#\\) (display "\\\\" port))
+		((#\") (display "\\\"" port))
+		((#\tab) (display "\\t" port))
+		((#\page) (display "\\f" port))
+		((#\newline) (display "\\\n" port))
+		((#\return) (display "\\\r" port))
+		(else (display c port))))
+	    (string->list s))
+  (display "\"" port))
+
+(define (news-page node)
   (let ((d (time->utc-date (make-cufp-time (node-created node))))
 	(name (file-name-nondirectory (node-url node)))
 	(title (node-title node)))
-    (let* ((full-dir (string-append output-dir "/_posts"))
-	   (full-name (string-append full-dir "/"
-				     (number->string (+ 1900 (date-year d)))
-				     "-"
-				     (pad-number 2 (+ 1 (date-month d)))
-				     "-"
-				     (pad-number 2 (date-month-day d))
-				     "-"
-				     name
-				     ".md")))
-      (display "Writing ") (display title) (display " -> ") (display full-name) (newline)
-      (make-directory-p full-dir)
-      (call-with-output-file full-name
-	(lambda (port)
-	  (write-front-matter port 
-		      (list (cons "layout" "news")
-			    (cons "title" title)))
-	  (write-body port (node-body node) page-replacements))))))
+      (make-page 'news
+		 (string-append "_posts/"
+				(number->string (+ 1900 (date-year d)))
+				"-"
+				(pad-number 2 (+ 1 (date-month d)))
+				"-"
+				(pad-number 2 (date-month-day d))
+				"-"
+				name)
+		 (list (cons "layout" "news")
+		       (cons "title" title))
+		 (node-body node))))
 
 (define (format-time-date t)
   (format-date "%A, %B %d, %Y" (time->local-date t)))
@@ -522,11 +570,12 @@
 				       (regexp-option submatches)
 				       (regexp-option extended)))
 
-(define (extract-cufp-website file output-dir)
+(define (extract-cufp-website file)
   (let* ((user-table (read-user-table file))
 	 (file-table (read-file-table file))
 	 (node-table (read-node-table user-table file))
-	 (session-table (read-session-table user-table file-table node-table file)))
+	 (session-table (read-session-table user-table file-table node-table file))
+	 (pages '()))
 
     (define page-replacements
       (list
@@ -544,7 +593,12 @@
 	     (lambda (text dir)
 	       (string-append "[" text "](http://cufp.org/" dir ".html)")))))
 
-    (display "Writing nodes ...") (newline)
+    (define (add-page! type url headers body)
+      (set! pages 
+	    (cons (make-page type url headers body)
+		  pages)))
+
+    (display "Processing nodes ...") (newline)
     (table-walk 
      (lambda (vid node)
        (case (node-type node)
@@ -552,17 +606,16 @@
 	  (cond
 	   ((node-url node)
 	    => (lambda (url)
-		 (write-to-url 
-		  output-dir url
-		  (lambda (port)
-		    (write-front-matter port (list (cons "layout" "node")
-						   (cons "title" (node-title node))))
-		    (write-body port (node-body node) page-replacements)))))))
+		 (add-page! 'node
+			    url
+			    (list (cons "layout" "node")
+				  (cons "title" (node-title node)))
+			    (node-body node))))))
 	 ((news)
-	  (write-news output-dir node page-replacements))))
+	  (set! pages (cons (news-page node) pages)))))
      node-table)
 
-    (display "Writing sessions ...") (newline)
+    (display "Processing sessions ...") (newline)
     (table-walk
      (lambda (vid session)
        (cond
@@ -571,51 +624,64 @@
 	      (cond
 	       ((node-url node)
 		=> (lambda (url)
-		     (write-to-url
-		      output-dir url
-		      (lambda (port)
-			(let* ((front-matter
-				(list 
-				 (cons "layout" "session")
-				 (cons "title" (node-title node))
-				 (cons "time" (format-time-range (session-time session)
-								 (session-time-2 session)))))
-			       (front-matter
-				(cond
-				 ((session-speaker session)
-				  => (lambda (speaker)
-				       (cons (cons "speaker" (user-full-name speaker)) front-matter)))
-				 (else
-				  front-matter)))
-			       (front-matter
-				(cond
-				 ((session-file session)
-				  => (lambda (file)
-				       (cons (cons "file" (file-path file))
-					     front-matter)))
-				 (else
-				  front-matter))))
-			  (write-front-matter port front-matter))
-			(write-body port (node-body node) page-replacements)
-			(newline port)
-			(cond
-			 ((session-details session)
-			  => (lambda (details)
-			       (write-body port details page-replacements)))))))))))))
+		     (let* ((front-matter
+			     (list 
+			      (cons "layout" "session")
+			      (cons "title" (node-title node))
+			      (cons "time" (format-time-range (session-time session)
+							      (session-time-2 session)))))
+			    (front-matter
+			     (cond
+			      ((session-speaker session)
+			       => (lambda (speaker)
+				    (cons (cons "speaker" (user-full-name speaker)) front-matter)))
+			      (else
+			       front-matter)))
+			    (front-matter
+			     (cond
+			      ((session-file session)
+			       => (lambda (file)
+				    (cons (cons "file" (file-path file))
+					  front-matter)))
+			      (else
+			       front-matter))))
+		       (add-page! 'session
+				  url
+				  front-matter
+				  (cond
+				   ((session-details session)
+				    => (lambda (details)
+					 (string-append (node-body node) "\n" details)))
+				   (else (node-body node))))))))))))
      session-table)
     
-    (display "Writing users ...") (newline)
+    (display "Processing users ...") (newline)
     (table-walk
      (lambda (uid user)
        (let ((node (user-node user)))
 	 (if (node? node)
-	     (write-to-url 
-	      output-dir (string-append "users/" (user-name user))
-	      (lambda (port)
-		(write-front-matter port
-			    (list
-			     (cons "layout" "user")
-			     (cons "title" (user-full-name user))))
-		(write-body port (node-body node) page-replacements))))))
-     user-table)))
-		
+	     (add-page! 'user
+			(string-append "users/" (user-name user))
+			(list
+			 (cons "layout" "user")
+			 (cons "title" (user-full-name user)))
+			(node-body node)))))
+     user-table)
+
+    (display "Applying page replacements ...") (newline)
+    (map (lambda (page)
+	   (apply-page-replacements page-replacements page))
+	 pages)))
+
+(define (write-pages-to-jekyll pages output-dir)
+  (display "Writing pages ") (newline)
+  (for-each (lambda (page)
+	      (write-page-to-jekyll output-dir page))
+	    pages))
+
+(define (write-pages-to-json pages output-file)
+  (call-with-output-file output-file
+    (lambda (port)
+      (for-each (lambda (page)
+		  (write-page-to-json port page))
+		pages))))

@@ -1,21 +1,35 @@
 * Run it
 
-- create an output directory like so:
-
-#+BEGIN_EXAMPLE
-rm -rf web && ( mkdir web && ln -s ../jekyll/_layouts web )
-#+END_EXAMPLE
-
 - get Scheme 48 1.9, then run this:
 
 #+BEGIN_EXAMPLE
 scheme48
 ,open exceptions extended-ports tables define-record-types posix-files filenames posix-regexps posix-time
 ,load extract-cufp-web.scm
-(extract-cufp-website "cufpdev.sql" "web")
+(define ps (extract-cufp-website "cufpdev.sql"))
 #+END_EXAMPLE
 
-- Run Jekyll like so:
+- For JSON output:
+
+#+BEGIN_EXAMPLE
+(write-pages-to-json ps "pages.json")
+#+END_EXAMPLE
+
+- For Jekyll output:
+
+- create an output directory like so:
+
+#+BEGIN_EXAMPLE
+rm -rf web && ( mkdir web && ln -s ../jekyll/_layouts web )
+#+END_EXAMPLE
+
+- then do this:
+
+#+BEGIN_EXAMPLE
+(write-pages-to-jekyll ps "web")
+#+END_EXAMPLE
+
+- run Jekyll like so:
 
 #+BEGIN_EXAMPLE
 cd web
