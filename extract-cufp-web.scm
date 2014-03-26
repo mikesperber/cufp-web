@@ -540,18 +540,22 @@
   (let ((d (time->utc-date (make-cufp-time (node-created node))))
 	(name (file-name-nondirectory (node-url node)))
 	(title (node-title node)))
+    (let ((date 
+	   (string-append
+	    (number->string (+ 1900 (date-year d)))
+	    "-"
+	    (pad-number 2 (+ 1 (date-month d)))
+	    "-"
+	    (pad-number 2 (date-month-day d)))))
       (make-page 'news
 		 (string-append "_posts/"
-				(number->string (+ 1900 (date-year d)))
-				"-"
-				(pad-number 2 (+ 1 (date-month d)))
-				"-"
-				(pad-number 2 (date-month-day d))
+				date
 				"-"
 				name)
 		 (list (cons "layout" "news")
+		       (cons "date" date)
 		       (cons "title" title))
-		 (node-body node))))
+		 (node-body node)))))
 
 (define (format-time-date t)
   (format-date "%A, %B %d, %Y" (time->local-date t)))
