@@ -1,4 +1,4 @@
-; ,open exceptions extended-ports tables define-record-types posix-files filenames posix-regexps posix-time
+; ,open exceptions extended-ports tables define-record-types posix-files filenames posix-regexps posix-time r6rs-lists
 
 (define time-offset (* 60 60 6)) ; MET is 6 hours off east-coast time
 
@@ -282,7 +282,7 @@
       (for-each-table-record proc port table-name))))
 
 (define-record-type :node
-  (make-node nid vid type title body created status url)
+  (make-node nid vid type title body created status url term-data-list)
   node?
   (nid node-nid)
   (vid node-vid)
@@ -291,7 +291,11 @@
   (body node-body set-node-body!)
   (created node-created)
   (status node-status)
-  (url node-url set-node-url!))
+  (url node-url set-node-url!)
+  (term-data-list node-term-data-list set-node-term-data-list!))
+
+(define (node-headers n)
+  (term-data-list-headers (node-term-data-list n)))
 
 (define-record-type :user
   (make-user uid name mail picture)
@@ -363,15 +367,61 @@
     file-table))
   
 
+(define-record-type :term-data
+  (make-term-data tid vid name description weight)
+  term-data?
+  (tid term-data-tid) ; key
+  (vid term-data-vid)
+  (name term-data-name)
+  (description term-data-description)
+  (weight term-data-weight))
+
+(define (term-data-category td)
+  (case (term-data-vid td)
+    ((1) 'keywords)
+    ((2) 'companies)
+    ((3) 'conference-years)
+    ((4) 'languages)
+    ((5) 'regions)))
+
+(define term-data-vids '(1 2 3 4 5))
+
+(define (term-data-list-headers tds)
+  (let ((by-vid
+	 (filter pair?
+		 (map (lambda (vid)
+			(filter (lambda (td)
+				  (= vid (term-data-vid td)))
+				tds))
+		      term-data-vids))))
+    (map (lambda (tds)
+	   (cons (symbol->string (term-data-category (car tds)))
+		 (map term-data-name tds)))
+	 by-vid)))
+
+(define (read-term-data-table file)
+  (let ((term-data-table (make-integer-table)))
+    (for-each-table-record-in-file
+     (lambda (rec)
+       (apply (lambda (tid vid name description weight)
+		(table-set! term-data-table
+			    tid
+			    (make-term-data tid vid name description weight)))
+	      rec))
+     file
+     "term_data")
+    term-data-table))
+
 (define (read-node-table user-table file)
-  (let ((node-table (make-integer-table)))
+  (let ((term-data-table (read-term-data-table file))
+	(node-table (make-integer-table)))
     (for-each-table-record-in-file
      (lambda (rec)
        (apply
 	(lambda (nid vid type language title uid status created changed comment promote moderate sticky tnid translate)
 	  (display "Node: ") (display nid) (newline)
 	  (let* ((type (string->symbol type))
-		 (node (make-node nid vid type title #f created status #f)))
+		 (node (make-node nid vid type title #f created status #f '())))
 	    (if (eq? type 'user_profile)
 		(let ((user (table-ref user-table uid)))
 		  (set-user-node! user node)))
@@ -408,6 +458,20 @@
      file
      "url_alias")
 
+    (for-each-table-record-in-file
+     (lambda (rec)
+       (apply (lambda (nid vid tid)
+		(cond
+		 ((table-ref node-table nid)
+		  => (lambda (node)
+		       (cond
+			((table-ref term-data-table tid)
+			 => (lambda (term-data)
+			      (set-node-term-data-list! node
+							(cons term-data (node-term-data-list node))))))))))
+	      rec))
+     file
+     "term_node")
     node-table))
 
 (define (read-session-table user-table file-table node-table file)
@@ -515,12 +579,28 @@
 	(let ((p (car alist)))
 	  (display-json-string port (car p))
 	  (display " : " port)
-	  (display-json-string port (cdr p))
+	  (display-json port (cdr p))
 	  (if (pair? (cdr alist))
 	      (begin (display "," port) (newline port)))
 	  (loop (cdr alist)))))
   (newline port)
   (display "}" port) (newline port))
+
+(define (display-json port thing)
+  (cond
+   ((string? thing) (display-json-string port thing))
+   ((list? thing) (display-json-array port thing))))
+
+(define (display-json-array port lis)
+  (display "[" port)
+  (if (pair? lis)
+      (begin
+	(display-json port (car lis))
+	(for-each (lambda (thing)
+		    (display ", " port)
+		    (display-json port thing))
+		  (cdr lis))))
+  (display "]" port))
 
 (define (display-json-string port s)
   (display "\"" port)
@@ -552,9 +632,10 @@
 				date
 				"-"
 				name)
-		 (list (cons "layout" "news")
-		       (cons "date" date)
-		       (cons "title" title))
+		 (append (list (cons "layout" "news")
+			       (cons "date" date)
+			       (cons "title" title))
+			 (node-headers node))
 		 (node-body node)))))
 
 (define (format-time-date t)
@@ -612,8 +693,9 @@
 	    => (lambda (url)
 		 (add-page! 'node
 			    url
-			    (list (cons "layout" "node")
-				  (cons "title" (node-title node)))
+			    (append (list (cons "layout" "node")
+					  (cons "title" (node-title node)))
+				    (node-headers node))
 			    (node-body node))))))
 	 ((news)
 	  (set! pages (cons (news-page node) pages)))))
@@ -651,7 +733,8 @@
 			       front-matter))))
 		       (add-page! 'session
 				  url
-				  front-matter
+				  (append front-matter
+					  (node-headers node))
 				  (cond
 				   ((session-details session)
 				    => (lambda (details)
@@ -666,9 +749,11 @@
 	 (if (node? node)
 	     (add-page! 'user
 			(string-append "users/" (user-name user))
-			(list
-			 (cons "layout" "user")
-			 (cons "title" (user-full-name user)))
+			(append 
+			 (list
+			  (cons "layout" "user")
+			  (cons "title" (user-full-name user)))
+			 (node-headers node))
 			(node-body node)))))
      user-table)
 
