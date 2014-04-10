@@ -533,7 +533,11 @@
   (make-page (page-type page)
 	     (page-url page)
 	     (page-headers page)
-	     (regexps-replace-exhaustively page-replacements (page-body page))))
+	     (cond
+	      ((page-body page)
+	       => (lambda (body)
+		    (regexps-replace-exhaustively page-replacements body)))
+	      (else #f))))
 
 (define (write-to-url output-dir url proc)
   (let ((dir (file-name-directory url))
