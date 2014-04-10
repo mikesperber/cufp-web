@@ -99,6 +99,31 @@ env TMPDIR=/var/tmp /usr/local/mysql/bin/mysqld_safe
 
 Password: WI...
 
+* User data
+
+users:
+
+(26, 'jheard', '3914331b7dba8bad1293e97f85f3d83d', 'jeff@renci.org', 0, 0, 0, '', '', 0, 1264623114, 1264623114, 0, 1, NULL, '', 'sites/all/files/userPictures/picture-26.jpg', 'jeff@renci.org', 'a:7:{s:13:"form_build_id";s:37:"form-dd866afa33855c37a12324350915ae7d";s:6:"format";s:1:"1";s:7:"contact";i:1;s:24:"xmlsitemap_user_priority";s:2:"-2";s:9:"nodewords";a:7:{s:8:"abstract";a:1:{s:5:"value";s:0:"";}s:9:"canonical";a:1:{s:5:"value";s:0:"";}s:9:"copyright";a:1:{s:5:"value";s:0:"";}s:11:"description";a:1:{s:5:"value";s:0:"";}s:8:"keywords";a:1:{s:5:"value";s:0:"";}s:13:"revisit-after";a:1:{s:5:"value";s:1:"1";}s:6:"robots";a:2:{s:5:"value";a:6:{s:9:"noarchive";i:0;s:8:"nofollow";i:0;s:7:"noindex";i:0;s:5:"noodp";i:0;s:9:"nosnippet";i:0;s:6:"noydir";i:0;}s:11:"use_default";i:0;}}s:14:"picture_delete";s:0:"";s:14:"picture_upload";s:0:"";}', ''),
+
+node_revisions:
+
+(34, 34, 1, 'Jefferson Heard - Profile 34', '<p>\r\nI am an accomplished programmer, with 10 years experience in C++ and Java (with J2EE), as well as 7 years experience in Common Lisp, Python, and Perl, 3 years experience in Haskell, as well as having programming experience in several other languages.  </p>\r\n<p>\r\nI have a great amount of experience with large structured and unstructured (text) databases, both in designing the data layouts and in building, querying, and designing systems that can use such data most effectively.  In the past, i''ve built multi-terabyte multisouce integrated (mined) databases, terascale search systems for freeform keyword search and complex boolean information retrieval, search mediation systems.</p>\r\n<p>\r\nI currently work in visualization, specifically writing new interactive 3-dimensional visualizations which scale to massive datasets, structured, semistructured, and unstructured\r\n</p>', '<p>\r\nI am an accomplished programmer, with 10 years experience in C++ and Java (with J2EE), as well as 7 years experience in Common Lisp, Python, and Perl, 3 years experience in Haskell, as well as having programming experience in several other languages.  </p>', '', 1289353191, 1),
+
+node:
+
+(34, 34, 'user_profile', '', 'Jefferson Heard - Profile 34', 26, 1, 1264623115, 1289353191, 0, 0, 0, 0, 0, 0),
+
+term_data:
+
+(43, 2, 'Veracentra', '', 0),
+(31, 4, 'Haskell', '', 0),
+
+INSERT INTO `term_node` (`nid`, `vid`, `tid`) VALUES
+
+(34, 34, 43),
+(34, 34, 31),
+
+
 * DONE Links
   CLOSED: [2012-07-28 Sat 18:14]
 #+BEGIN_EXAMPLE
